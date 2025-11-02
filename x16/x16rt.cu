@@ -1,5 +1,5 @@
-/** x16rt.cu — Revised version with safer endianness, reduced stack usage, scoped sph contexts, safer cudaMalloc&init ordering, and deterministic hashOrder handling, improved performance a little bit,
-Soteria 2025 - GPL code */
+/** x16rt.cu — revised version with safer endianness, reduced stack usage,
+ scoped sph contexts, safer cudaMalloc&init ordering, and deterministic hashOrder handling, Soteria 2025 - GPL code */
 
 #include <stdio.h>
 #include <memory.h>
@@ -231,10 +231,9 @@ extern "C" void x16rt_hash(void *output, const void *input)
             sph_sha512_close(&ctx, hash);
             break;
         }
-        
         in = (void*) hash;
         size = 64;
-    } 
+    }
     memcpy(output, hash, 32);
 }
 
@@ -274,10 +273,13 @@ static void init_x16rt(const int thr_id, const int dev_id)
     x11_shavite512_cpu_init(thr_id, throughput);
     x11_simd512_cpu_init(thr_id, throughput);
     x13_hamsi512_cpu_init(thr_id, throughput);
+    x11_echo512_cpu_init(thr_id, throughput);
     x16_echo512_cuda_init(thr_id, throughput);
+    x13_fugue512_cpu_init(thr_id, throughput);
     x16_fugue512_cpu_init(thr_id, throughput);
     x15_whirlpool_cpu_init(thr_id, throughput, 0);
     x16_whirlpool512_init(thr_id, throughput);
+    x14_shabal512_cpu_init(thr_id, throughput);
     x17_sha512_cpu_init(thr_id, throughput);
 }
 
