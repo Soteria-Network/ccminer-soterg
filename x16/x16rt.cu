@@ -619,6 +619,7 @@ extern "C" void free_x16rt(int thr_id)
     quark_blake512_cpu_free(thr_id);
     quark_groestl512_cpu_free(thr_id);
     x11_simd512_cpu_free(thr_id);
+    x13_fugue512_cpu_free(thr_id);
     x16_fugue512_cpu_free(thr_id);
     x15_whirlpool_cpu_free(thr_id);
 
