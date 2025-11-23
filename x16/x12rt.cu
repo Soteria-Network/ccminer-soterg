@@ -13,7 +13,7 @@ extern "C" {
 #include "sph/sph_skein.h"
 #include "sph/sph_jh.h"
 #include "sph/sph_keccak.h"
-#include "sph/sph_fugue.h"
+#include "sph/sph_luffa.h"
 #include "sph/sph_cubehash.h"
 #include "sph/sph_sha2.h"
 #include "sph/sph_simd.h"
@@ -34,7 +34,7 @@ enum Algo {
     JH,
     KECCAK,
     SKEIN,
-    FUGUE,
+    LUFFA,
     CUBEHASH,
     SIMD,
     ECHO,
@@ -50,7 +50,7 @@ static const char* algo_strings[] = {
     "jh512",
     "keccak",
     "skein",
-    "fugue",
+    "luffa",
     "cube",
     "simd",
     "echo",
@@ -137,7 +137,7 @@ extern "C" void x12r_hash(void *output, const void *input)
     sph_jh512_context ctx_jh;
     sph_keccak512_context ctx_keccak;
     sph_skein512_context ctx_skein;
-    sph_fugue512_context ctx_fugue;
+    sph_luffa512_context ctx_luffa;
     sph_cubehash512_context ctx_cubehash;
     sph_sha512_context ctx_sha512;
     sph_simd512_context ctx_simd;
@@ -175,11 +175,11 @@ extern "C" void x12r_hash(void *output, const void *input)
             sph_skein512(&ctx_skein, in, size);
             sph_skein512_close(&ctx_skein, hash);
             break;
-        case FUGUE:
-            sph_fugue512_init(&ctx_fugue);
-            sph_fugue512(&ctx_fugue, in, size);
-            sph_fugue512_close(&ctx_fugue, hash);
-            break;
+	case LUFFA:
+		sph_luffa512_init(&ctx_luffa);
+		sph_luffa512(&ctx_luffa, in, size);
+		sph_luffa512_close(&ctx_luffa, hash);
+		break;
         case CUBEHASH:
             sph_cubehash512_init(&ctx_cubehash);
             sph_cubehash512(&ctx_cubehash, in, size);
@@ -261,8 +261,8 @@ static void init_x12r(const int thr_id, const int dev_id)
     x13_hamsi512_cpu_init(thr_id, throughput);
     x16_echo512_cuda_init(thr_id, throughput);
     x11_echo512_cpu_init(thr_id, throughput);
-    x13_fugue512_cpu_init(thr_id, throughput);
-    x16_fugue512_cpu_init(thr_id, throughput);
+    qubit_luffa512_cpu_init(thr_id, throughput);
+    x11_luffa512_cpu_init(thr_id, throughput); // 64
     x14_shabal512_cpu_init(thr_id, throughput);
     x17_sha512_cpu_init(thr_id, throughput);
 }
@@ -333,9 +333,9 @@ extern "C" int scanhash_x12r(int thr_id, struct work* work, uint32_t max_nonce, 
         case SKEIN:
             skein512_cpu_setBlock_80((void*)endiandata);
             break;
- 	case FUGUE:
-	     x16_fugue512_setBlock_80((void*)pdata);
-	     break;    
+	case LUFFA:
+	    qubit_luffa512_cpu_setBlock_80((void*)endiandata);
+	    break;   
         case CUBEHASH:
             cubehash512_setBlock_80(thr_id, endiandata);
             break;
@@ -388,10 +388,10 @@ extern "C" int scanhash_x12r(int thr_id, struct work* work, uint32_t max_nonce, 
                 skein512_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id], 1); order++;
                 TRACE("skein80:");
                 break;
-			case FUGUE:
-				x16_fugue512_cuda_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]); order++;
-				TRACE("fugue  :");
-				break;	
+	   case LUFFA:
+		qubit_luffa512_cpu_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id], order++);
+		TRACE("luffa80:");
+		break;
             case CUBEHASH:
                 cubehash512_cuda_hash_80(thr_id, throughput, pdata[19], d_hash[thr_id]); order++;
                 TRACE("cube 80:");
@@ -446,10 +446,10 @@ extern "C" int scanhash_x12r(int thr_id, struct work* work, uint32_t max_nonce, 
                 quark_skein512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
                 TRACE("skein  :");
                 break;
-			case FUGUE:
-				x13_fugue512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
-				TRACE("fugue  :");
-				break;
+	   case LUFFA:
+		x11_luffa512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
+		TRACE("luffa  :");
+		break;
             case CUBEHASH:
                 x11_cubehash512_cpu_hash_64(thr_id, throughput, d_hash[thr_id]); order++;
                 TRACE("cube   :");
@@ -562,8 +562,7 @@ extern "C" void free_x12r(int thr_id)
     quark_blake512_cpu_free(thr_id);
     quark_groestl512_cpu_free(thr_id);
     x11_simd512_cpu_free(thr_id);
-	x13_fugue512_cpu_free(thr_id);
-	x16_fugue512_cpu_free(thr_id); 
+
     cuda_check_cpu_free(thr_id);
 
     cudaDeviceSynchronize();
