@@ -1,5 +1,5 @@
 /**
- * X16R algorithm (X16 with Randomized chain order)
+ * X16RT algorithm (X16 with Randomized chain order)
  *
  * tpruvot 2018 - GPL code
  */
@@ -95,8 +95,8 @@ static void getAlgoString(const uint32_t* prevblock, char *output)
 	*sptr = '\0';
 }
 
-// X16R CPU Hash (Validation)
-extern "C" void x16r_hash(void *output, const void *input)
+// X16RT CPU Hash (Validation)
+extern "C" void x16rt_hash(void *output, const void *input)
 {
 	unsigned char _ALIGN(64) hash[128];
 
@@ -216,7 +216,7 @@ extern "C" void x16r_hash(void *output, const void *input)
 	memcpy(output, hash, 32);
 }
 
-void whirlpool_midstate(void *state, const void *input)
+static void whirlpool_midstate(void *state, const void *input)
 {
 	sph_whirlpool_context ctx;
 
@@ -230,12 +230,12 @@ static bool init[MAX_GPUS] = { 0 };
 static bool use_compat_kernels[MAX_GPUS] = { 0 };
 
 //#define _DEBUG
-#define _DEBUG_PREFIX "x16r-"
+#define _DEBUG_PREFIX "x16rt-"
 #include "cuda_debug.cuh"
 
 static int algo80_fails[HASH_FUNC_COUNT] = { 0 };
 
-extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, unsigned long *hashes_done)
+extern "C" int scanhash_x16rt(int thr_id, struct work* work, uint32_t max_nonce, unsigned long *hashes_done)
 {
 	uint32_t *pdata = work->data;
 	uint32_t *ptarget = work->target;
@@ -521,7 +521,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 #ifdef _DEBUG
 		uint32_t _ALIGN(64) dhash[8];
 		be32enc(&endiandata[19], pdata[19]);
-		x16r_hash(dhash, endiandata);
+		x16rt_hash(dhash, endiandata);
 		applog_hash(dhash);
 		return -1;
 #endif
@@ -530,7 +530,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 			const uint32_t Htarg = ptarget[7];
 			uint32_t _ALIGN(64) vhash[8];
 			be32enc(&endiandata[19], work->nonces[0]);
-			x16r_hash(vhash, endiandata);
+			x16rt_hash(vhash, endiandata);
 
 			if (vhash[7] <= Htarg && fulltest(vhash, ptarget)) {
 				work->valid_nonces = 1;
@@ -538,7 +538,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 				work_set_target_ratio(work, vhash);
 				if (work->nonces[1] != 0) {
 					be32enc(&endiandata[19], work->nonces[1]);
-					x16r_hash(vhash, endiandata);
+					x16rt_hash(vhash, endiandata);
 					bn_set_target_ratio(work, vhash, 1);
 					work->valid_nonces++;
 					pdata[19] = max(work->nonces[0], work->nonces[1]) + 1;
@@ -596,7 +596,7 @@ extern "C" int scanhash_x16r(int thr_id, struct work* work, uint32_t max_nonce, 
 }
 
 // cleanup
-extern "C" void free_x16r(int thr_id)
+extern "C" void free_x16rt(int thr_id)
 {
 	if (!init[thr_id])
 		return;
