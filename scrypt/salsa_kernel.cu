@@ -251,15 +251,18 @@ int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurre
 	int cw = console_width();
 	int optimal_blocks = 0;
 
-	cudaDeviceProp props;
-	checkCudaErrors(cudaGetDeviceProperties(&props, device_map[thr_id]));
-	concurrent = (props.concurrentKernels > 0);
+cudaDeviceProp props;
+checkCudaErrors(cudaGetDeviceProperties(&props, device_map[thr_id]));
+concurrent = (props.concurrentKernels > 0);
 
-	WARPS_PER_BLOCK = -1;
+WARPS_PER_BLOCK = -1;
 
-	// if not specified, use interactive mode for devices that have the watchdog timer enabled
-	if (device_interactive[thr_id] == -1)
-		device_interactive[thr_id] = props.kernelExecTimeoutEnabled;
+// if not specified, use interactive mode for devices that have the watchdog timer enabled
+if (device_interactive[thr_id] == -1) {
+    int timeout_enabled;
+    cudaDeviceGetAttribute(&timeout_enabled, cudaDevAttrKernelExecTimeout, device_map[thr_id]);
+    device_interactive[thr_id] = timeout_enabled;
+}
 
 	// turn off texture cache if not otherwise specified
 	if (device_texturecache[thr_id] == -1)
