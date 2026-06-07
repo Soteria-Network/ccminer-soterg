@@ -1,4 +1,4 @@
-﻿#include <stdio.h>
+#include <stdio.h>
 #include <memory.h>
 #include <string.h>
 #include <unistd.h>
@@ -100,12 +100,22 @@ void cuda_print_devices()
 	for (int n=0; n < ngpus; n++) {
 		int dev_id = device_map[n % MAX_GPUS];
 		cudaDeviceProp props;
-		cudaGetDeviceProperties(&props, dev_id);
+		if (cudaGetDeviceProperties(&props, dev_id) != cudaSuccess) {
+			fprintf(stderr, "GPU #%d: cannot get properties\n", dev_id);
+			continue;
+		}
+
+		int clock_khz = 0, memclock_khz = 0;
+		cudaError_t e1 = cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, dev_id);
+		cudaError_t e2 = cudaDeviceGetAttribute(&memclock_khz, cudaDevAttrMemoryClockRate, dev_id);
+		double gpu_mhz = (e1 == cudaSuccess) ? (double)clock_khz / 1000.0 : 0.0;
+		double mem_mhz = (e2 == cudaSuccess) ? (double)memclock_khz / 1000.0 : 0.0;
+
 		if (!opt_n_threads || n < opt_n_threads) {
-			fprintf(stderr, "GPU #%d: SM %d.%d %s @ %.0f MHz (MEM %.0f)\n", dev_id,
+			fprintf(stderr, "GPU #%d: SM %d.%d %s @ %.0f MHz (MEM %.0f MHz)\n", dev_id,
 				props.major, props.minor, device_name[dev_id],
-				(double) props.clockRate/1000,
-				(double) props.memoryClockRate/1000);
+				gpu_mhz, mem_mhz);
+
 #ifdef USE_WRAPNVML
 			if (opt_debug) nvml_print_device_info(dev_id);
 #ifdef WIN32
@@ -221,7 +231,6 @@ int cuda_available_memory(int thr_id)
 	int dev_id = device_map[thr_id % MAX_GPUS];
 #if defined(_WIN32) && defined(USE_WRAPNVML)
 	uint64_t tot64 = 0, free64 = 0;
-	// cuda (6.5) one can crash on pascal and dont handle 8GB
 	nvapiMemGetInfo(dev_id, &free64, &tot64);
 	return (int) (free64 / (1024));
 #else
@@ -253,20 +262,37 @@ void cuda_clear_lasterror()
 
 int cuda_gpu_info(struct cgpu_info *gpu)
 {
-	cudaDeviceProp props;
-	if (cudaGetDeviceProperties(&props, gpu->gpu_id) == cudaSuccess) {
-		gpu->gpu_clock = (uint32_t) props.clockRate;
-		gpu->gpu_memclock = (uint32_t) props.memoryClockRate;
-		gpu->gpu_mem = (uint64_t) (props.totalGlobalMem / 1024); // kB
+    cudaDeviceProp props;
+    if (cudaGetDeviceProperties(&props, gpu->gpu_id) != cudaSuccess)
+        return -1;
+
+    int clock_khz = 0, memclock_khz = 0;
+    if (cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, gpu->gpu_id) == cudaSuccess)
+        gpu->gpu_clock = (uint32_t) clock_khz;    /* stored as kHz */
+    else
+        gpu->gpu_clock = 0;
+
+    if (cudaDeviceGetAttribute(&memclock_khz, cudaDevAttrMemoryClockRate, gpu->gpu_id) == cudaSuccess)
+        gpu->gpu_memclock = (uint32_t) memclock_khz; /* stored as kHz */
+    else
+        gpu->gpu_memclock = 0;
+
+    /* totalGlobalMem is in bytes; convert to MB */
+    gpu->gpu_mem = (uint64_t)(props.totalGlobalMem / 1024 / 1024); /* MB */
+
 #if defined(_WIN32) && defined(USE_WRAPNVML)
-		// required to get mem size > 4GB (size_t too small for bytes on 32bit)
-		nvapiMemGetInfo(gpu->gpu_id, &gpu->gpu_memfree, &gpu->gpu_mem); // kB
+    /* required to get mem size > 4GB on 32-bit Windows via NVAPI */
+    if (nvapiMemGetInfo(gpu->gpu_id, &gpu->gpu_memfree, &gpu->gpu_mem) != 0) {
+        /* handle NVAPI error if needed; keep previous gpu_mem on failure */
+    } else {
+        /* nvapi returned sizes in kB in your original code; convert to MB if needed */
+        gpu->gpu_mem = gpu->gpu_mem / 1024; /* MB */
+    }
 #endif
-		gpu->gpu_mem = gpu->gpu_mem / 1024; // MB
-		return 0;
-	}
-	return -1;
+
+    return 0;
 }
+
 
 // Zeitsynchronisations-Routine von cudaminer mit CPU sleep
 // Note: if you disable all of these calls, CPU usage will hit 100%
