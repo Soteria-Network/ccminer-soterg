@@ -1,6 +1,6 @@
-AC_INIT([ccminer-kudaraidee], [1.3.1], [], [ccminer-kudaraidee], [https://github.com/kudaraidee/ccminer-kudaraidee])
+AC_INIT([SoteriaMiner],[1.3.1],[],[SoteriaMiner],[https://github.com/Soteria-Network/ccminer-soterg])
 
-AC_PREREQ([2.69])
+AC_PREREQ([2.72])
 AC_CANONICAL_HOST
 AC_CONFIG_SRCDIR([ccminer.cpp])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
@@ -11,12 +11,15 @@ AM_MAINTAINER_MODE
 
 dnl Checks for programs
 AC_PROG_CC
-AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
 AM_PROG_AS
 AC_PROG_RANLIB
 AC_PROG_CXX
 AC_OPENMP
+
+dnl Force C++17 for CUDA 13+ compatibility
+CXXFLAGS="$CXXFLAGS -std=c++17"
+CUDA_CFLAGS="$CUDA_CFLAGS -std=c++17"
 
 dnl Checks for header files
 AC_CHECK_HEADERS([sys/endian.h sys/param.h syslog.h])
