@@ -26,6 +26,9 @@ extern "C" {
 #include "cuda_x16.h"
 
 static uint32_t *d_hash[MAX_GPUS];
+static int thr_block_size[MAX_GPUS] = { 0 }; 
+static int thr_grid_size[MAX_GPUS] = { 0 }; 
+static cudaStream_t stream[MAX_GPUS];
 
 enum Algo {
     BLAKE = 0,
@@ -59,14 +62,14 @@ static const char* algo_strings[] = {
     NULL
 };
 
-//#define TIME_MASK 0xffffff80
 #define TIME_MASK 0xFFFFFFA0
 
-static __thread uint32_t s_ntime = UINT32_MAX;
+static __thread uint8_t s_ntime = UINT32_MAX;
 static uint8_t s_firstalgo = 0xFF;
 static __thread char hashOrder[HASH_FUNC_COUNT + 1] = { 0 };
 static void init_x12r(const int thr_id, int dev_id);
 static uint32_t thr_throughput[MAX_GPUS] = { 0 };
+__constant__ uint8_t c_order[12];   // stored in GPU constant memory
 
 static uint8_t GetNibble(const uint8_t* hash, int index)
 {
@@ -251,6 +254,19 @@ static void init_x12r(const int thr_id, const int dev_id)
 
     thr_throughput[thr_id] = throughput;
 
+    // Create a stream for this thread (non-blocking)
+    cudaStreamCreate(&stream[thr_id]);
+    
+    // ---- Tune block size using occupancy ----
+    int block_size = 0;
+    int min_grid_size = 0;
+    cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size,
+        (void*)quark_blake512_cpu_hash_80, 0, 0);
+    // Fallback to 256 if occupancy fails
+    if (block_size == 0) block_size = 256;
+    thr_block_size[thr_id] = block_size;
+    thr_grid_size[thr_id] = (throughput + block_size - 1) / block_size;
+  
     // Per-algo initializers (x12 subset)
     quark_blake512_cpu_init(thr_id, throughput);
     quark_groestl512_cpu_init(thr_id, throughput);
@@ -304,19 +320,26 @@ extern "C" int scanhash_x12r(int thr_id, struct work* work, uint32_t max_nonce, 
     uint32_t ntime = swab32(pdata[17]);
 //    memcpy(&ntime, pdata + 68, sizeof(uint32_t));
 
-    if (s_ntime != ntime)
-    {
-        getprevblock(ntime, &prevblock);
-        getAlgoString(&prevblock[0], hashOrder);
-        s_ntime = ntime;
-        if (!thr_id) applog(LOG_INFO, "hash order: %s time: (%08x) time hash: (%08x)", hashOrder, ntime, prevblock);
+static uint8_t order_bytes[12];
+if (s_ntime != ntime)
+{
+    getprevblock(ntime, &prevblock);
+    getAlgoString(&prevblock[0], hashOrder);
+    s_ntime = ntime;
+
+    // Convert order to bytes and upload to GPU constant memory
+    for (int i = 0; i < 12; i++) {
+        char c = hashOrder[i];
+        order_bytes[i] = (c >= 'A') ? c - 'A' + 10 : c - '0';
     }
+//    cudaMemcpyToSymbol(c_order, order_bytes, 12, 0, cudaMemcpyHostToDevice);
+
+   if (!thr_id) applog(LOG_INFO, "hash order: %s time: (%08x) time hash: (%08x)", hashOrder, ntime, prevblock);
+}
 
     cuda_check_cpu_setTarget(ptarget);
 
-    const int hashes = (int)strlen(hashOrder);
-    const char first = hashOrder[0];
-    const uint8_t algo80 = first >= 'A' ? first - 'A' + 10 : first - '0';
+   const uint8_t algo80 = order_bytes[0];
     
     if (algo80 != s_firstalgo) {
         s_firstalgo = algo80;
@@ -426,13 +449,9 @@ extern "C" int scanhash_x12r(int thr_id, struct work* work, uint32_t max_nonce, 
                 break;
         }
 
-#pragma omp parallel
-#pragma omp for nowait
         for (int i = 1; i < 12; i++)
         {
-            const char elem = hashOrder[i];
-            const uint8_t algo64 = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
-
+            const uint8_t algo64 = order_bytes[i];
             switch (algo64) {
             case BLAKE:
                 quark_blake512_cpu_hash_64(thr_id, throughput, pdata[19], NULL, d_hash[thr_id], order++);
@@ -506,7 +525,7 @@ extern "C" int scanhash_x12r(int thr_id, struct work* work, uint32_t max_nonce, 
             be32enc(&endiandata[19], work->nonces[0]);
             x12r_hash(vhash, endiandata);
 
-            if (1 || vhash[7] <= Htarg && fulltest(vhash, ptarget)) {
+            if (vhash[7] <= Htarg && fulltest(vhash, ptarget)) {
                 work->valid_nonces = 1;
                 work->nonces[1] = cuda_check_hash_suppl(thr_id, throughput, pdata[19], d_hash[thr_id], 1);
                 work_set_target_ratio(work, vhash);
