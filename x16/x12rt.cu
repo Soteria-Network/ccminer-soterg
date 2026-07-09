@@ -134,18 +134,20 @@ extern "C" void x12r_hash(void *output, const void *input)
 {
     unsigned char _ALIGN(64) hash[128];
 
-    sph_blake512_context ctx_blake;
-    sph_shabal512_context ctx_shabal;
-    sph_groestl512_context ctx_groestl;
-    sph_jh512_context ctx_jh;
-    sph_keccak512_context ctx_keccak;
-    sph_skein512_context ctx_skein;
-    sph_luffa512_context ctx_luffa;
-    sph_cubehash512_context ctx_cubehash;
-    sph_sha512_context ctx_sha512;
-    sph_simd512_context ctx_simd;
-    sph_echo512_context ctx_echo;
-    sph_hamsi512_context ctx_hamsi;
+    union {
+        sph_blake512_context   blake;
+        sph_shabal512_context  shabal;
+        sph_groestl512_context groestl;
+        sph_jh512_context      jh;
+        sph_keccak512_context  keccak;
+        sph_skein512_context   skein;
+        sph_luffa512_context   luffa;
+        sph_cubehash512_context cubehash;
+        sph_sha512_context     sha512;
+        sph_simd512_context    simd;
+        sph_echo512_context    echo;
+        sph_hamsi512_context   hamsi;
+    } ctx;
 
     void *in = (void*) input;
     int size = 80;
@@ -163,66 +165,66 @@ extern "C" void x12r_hash(void *output, const void *input)
         const uint8_t algo = elem >= 'A' ? elem - 'A' + 10 : elem - '0';
 
         switch (algo) {
-        case BLAKE:
-            sph_blake512_init(&ctx_blake);
-            sph_blake512(&ctx_blake, in, size);
-            sph_blake512_close(&ctx_blake, hash);
-            break;
-        case KECCAK:
-            sph_keccak512_init(&ctx_keccak);
-            sph_keccak512(&ctx_keccak, in, size);
-            sph_keccak512_close(&ctx_keccak, hash);
-            break;
-        case SKEIN:
-            sph_skein512_init(&ctx_skein);
-            sph_skein512(&ctx_skein, in, size);
-            sph_skein512_close(&ctx_skein, hash);
-            break;
-	case LUFFA:
-		sph_luffa512_init(&ctx_luffa);
-		sph_luffa512(&ctx_luffa, in, size);
-		sph_luffa512_close(&ctx_luffa, hash);
-		break;
-        case CUBEHASH:
-            sph_cubehash512_init(&ctx_cubehash);
-            sph_cubehash512(&ctx_cubehash, in, size);
-            sph_cubehash512_close(&ctx_cubehash, hash);
-            break;
-        case SIMD:
-            sph_simd512_init(&ctx_simd);
-            sph_simd512(&ctx_simd, in, size);
-            sph_simd512_close(&ctx_simd, hash);
-            break;
-        case HAMSI:
-            sph_hamsi512_init(&ctx_hamsi);
-            sph_hamsi512(&ctx_hamsi, in, size);
-            sph_hamsi512_close(&ctx_hamsi, hash);
-            break;
-        case SHA512:
-            sph_sha512_init(&ctx_sha512);
-            sph_sha512(&ctx_sha512,(const void*) in, size);
-            sph_sha512_close(&ctx_sha512,(void*) hash);
-            break;
-        case JH:
-            sph_jh512_init(&ctx_jh);
-            sph_jh512(&ctx_jh, in, size);
-            sph_jh512_close(&ctx_jh, hash);
-            break;
-        case SHABAL:
-            sph_shabal512_init(&ctx_shabal);
-            sph_shabal512(&ctx_shabal, in, size);
-            sph_shabal512_close(&ctx_shabal, hash);
-            break;
-        case GROESTL:
-            sph_groestl512_init(&ctx_groestl);
-            sph_groestl512(&ctx_groestl, in, size);
-            sph_groestl512_close(&ctx_groestl, hash);
-            break;
-        case ECHO:
-            sph_echo512_init(&ctx_echo);
-            sph_echo512(&ctx_echo, in, size);
-            sph_echo512_close(&ctx_echo, hash);
-            break;
+            case BLAKE:
+                sph_blake512_init(&ctx.blake);
+                sph_blake512(&ctx.blake, in, size);
+                sph_blake512_close(&ctx.blake, hash);
+                break;
+            case KECCAK:
+                sph_keccak512_init(&ctx.keccak);
+                sph_keccak512(&ctx.keccak, in, size);
+                sph_keccak512_close(&ctx.keccak, hash);
+                break;
+            case SKEIN:
+                sph_skein512_init(&ctx.skein);
+                sph_skein512(&ctx.skein, in, size);
+                sph_skein512_close(&ctx.skein, hash);
+                break;
+            case LUFFA:
+                sph_luffa512_init(&ctx.luffa);
+                sph_luffa512(&ctx.luffa, in, size);
+                sph_luffa512_close(&ctx.luffa, hash);
+                break;
+            case CUBEHASH:
+                sph_cubehash512_init(&ctx.cubehash);
+                sph_cubehash512(&ctx.cubehash, in, size);
+                sph_cubehash512_close(&ctx.cubehash, hash);
+                break;
+            case SIMD:
+                sph_simd512_init(&ctx.simd);
+                sph_simd512(&ctx.simd, in, size);
+                sph_simd512_close(&ctx.simd, hash);
+                break;
+            case HAMSI:
+                sph_hamsi512_init(&ctx.hamsi);
+                sph_hamsi512(&ctx.hamsi, in, size);
+                sph_hamsi512_close(&ctx.hamsi, hash);
+                break;
+            case SHA512:
+                sph_sha512_init(&ctx.sha512);
+                sph_sha512(&ctx.sha512, in, size);
+                sph_sha512_close(&ctx.sha512, hash);
+                break;
+            case JH:
+                sph_jh512_init(&ctx.jh);
+                sph_jh512(&ctx.jh, in, size);
+                sph_jh512_close(&ctx.jh, hash);
+                break;
+            case SHABAL:
+                sph_shabal512_init(&ctx.shabal);
+                sph_shabal512(&ctx.shabal, in, size);
+                sph_shabal512_close(&ctx.shabal, hash);
+                break;
+            case GROESTL:
+                sph_groestl512_init(&ctx.groestl);
+                sph_groestl512(&ctx.groestl, in, size);
+                sph_groestl512_close(&ctx.groestl, hash);
+                break;
+            case ECHO:
+                sph_echo512_init(&ctx.echo);
+                sph_echo512(&ctx.echo, in, size);
+                sph_echo512_close(&ctx.echo, hash);
+                break;
         }
         in = (void*) hash;
         size = 64;
